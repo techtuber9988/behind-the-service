@@ -23,7 +23,7 @@ router.post('/register', async (req, res) => {
   }
 
   const db = getDb();
-  const existing = db.get('users').find({ email }).value();
+  const existing = db.users.find((u) => u.email === email);
 
   if (existing) {
     return res.status(409).json({
@@ -35,7 +35,8 @@ router.post('/register', async (req, res) => {
   const id = generateId();
   const passwordHash = await bcrypt.hash(password, 10);
 
-  db.get('users').push({ id, email, password_hash: passwordHash, created_at: new Date().toISOString() }).write();
+  db.users.push({ id, email, password_hash: passwordHash, created_at: new Date().toISOString() });
+  db.persist();
 
   const token = jwt.sign({ userId: id, email }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
@@ -56,7 +57,7 @@ router.post('/login', async (req, res) => {
   }
 
   const db = getDb();
-  const user = db.get('users').find({ email }).value();
+  const user = db.users.find((u) => u.email === email);
 
   if (!user) {
     return res.status(401).json({

@@ -16,7 +16,7 @@ function authenticate(req, res, next) {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const db = getDb();
-    const user = db.get('users').find({ id: decoded.userId }).value();
+    const user = db.users.find((u) => u.id === decoded.userId);
 
     if (!user) {
       return res.status(401).json({

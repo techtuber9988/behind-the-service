@@ -14,55 +14,48 @@ async function processPendingJobs() {
 
   try {
     const db = getDb();
-    const pendingJobs = db.get('jobs').filter({ status: 'pending' }).value();
+    const job = db.jobs.find((j) => j.status === 'pending');
 
-    if (!pendingJobs || pendingJobs.length === 0) {
+    if (!job) {
       running = false;
       return;
     }
 
-    const job = pendingJobs.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))[0];
-
-    db.get('jobs').find({ id: job.id }).assign({
-      status: 'processing',
-      started_at: new Date().toISOString(),
-    }).write();
+    job.status = 'processing';
+    job.started_at = new Date().toISOString();
+    db.persist();
 
     console.log(`Processing job ${job.id} (${job.original_filename})`);
 
-    const pendingRows = db.get('import_rows').filter({ job_id: job.id, status: 'pending' }).value();
-    const rows = pendingRows.sort((a, b) => a.row_index - b.row_index);
+    const rows = db.import_rows
+      .filter((r) => r.job_id === job.id && r.status === 'pending')
+      .sort((a, b) => a.row_index - b.row_index);
 
     let processed = 0;
     for (const row of rows) {
       try {
         await processRow(row);
-        db.get('import_rows').find({ id: row.id }).assign({ status: 'completed' }).write();
+        row.status = 'completed';
         processed++;
       } catch (err) {
-        db.get('import_rows').find({ id: row.id }).assign({
-          status: 'failed',
-          error_message: err.message,
-        }).write();
+        row.status = 'failed';
+        row.error_message = err.message;
         processed++;
       }
 
-      db.get('jobs').find({ id: job.id }).assign({ processed_count: processed }).write();
+      job.processed_count = processed;
+      db.persist();
     }
 
-    const failedCount = db.get('import_rows').filter({ job_id: job.id, status: 'failed' }).value().length;
+    const failedCount = db.import_rows.filter((r) => r.job_id === job.id && r.status === 'failed').length;
 
     if (failedCount > 0) {
-      db.get('jobs').find({ id: job.id }).assign({
-        status: 'completed_with_errors',
-        completed_at: new Date().toISOString(),
-      }).write();
+      job.status = 'completed_with_errors';
     } else {
-      db.get('jobs').find({ id: job.id }).assign({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-      }).write();
+      job.status = 'completed';
     }
+    job.completed_at = new Date().toISOString();
+    db.persist();
 
     console.log(`Job ${job.id} completed: ${processed} rows processed, ${failedCount} errors`);
   } catch (err) {

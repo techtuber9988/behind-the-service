@@ -31,7 +31,7 @@ router.post('/', authenticate, upload.single('file'), (req, res) => {
   const idempotencyKey = req.headers['idempotency-key'] || jobId;
   const userId = req.user.id;
 
-  const existing = db.get('jobs').find({ idempotency_key: idempotencyKey, user_id: userId }).value();
+  const existing = db.jobs.find((j) => j.idempotency_key === idempotencyKey && j.user_id === userId);
 
   if (existing) {
     try { fs.unlinkSync(req.file.path); } catch {}
@@ -45,7 +45,7 @@ router.post('/', authenticate, upload.single('file'), (req, res) => {
   const fileContent = fs.readFileSync(req.file.path, 'utf-8');
   const lines = fileContent.split('\n').filter((l) => l.trim());
 
-  db.get('jobs').push({
+  db.jobs.push({
     id: jobId,
     user_id: userId,
     original_filename: req.file.originalname,
@@ -58,18 +58,20 @@ router.post('/', authenticate, upload.single('file'), (req, res) => {
     created_at: new Date().toISOString(),
     started_at: null,
     completed_at: null,
-  }).write();
+  });
 
   for (let i = 0; i < lines.length; i++) {
-    db.get('import_rows').push({
+    db.import_rows.push({
       id: generateId(),
       job_id: jobId,
       row_index: i,
       raw_data: lines[i],
       status: 'pending',
       error_message: null,
-    }).write();
+    });
   }
+
+  db.persist();
 
   res.status(202).json({
     job_id: jobId,
@@ -82,7 +84,7 @@ router.post('/', authenticate, upload.single('file'), (req, res) => {
 
 router.get('/:id', authenticate, (req, res) => {
   const db = getDb();
-  const job = db.get('jobs').find({ id: req.params.id, user_id: req.user.id }).value();
+  const job = db.jobs.find((j) => j.id === req.params.id && j.user_id === req.user.id);
 
   if (!job) {
     return res.status(404).json({
@@ -106,7 +108,7 @@ router.get('/:id', authenticate, (req, res) => {
 
 router.get('/:id/results', authenticate, (req, res) => {
   const db = getDb();
-  const job = db.get('jobs').find({ id: req.params.id, user_id: req.user.id }).value();
+  const job = db.jobs.find((j) => j.id === req.params.id && j.user_id === req.user.id);
 
   if (!job) {
     return res.status(404).json({
@@ -122,7 +124,7 @@ router.get('/:id/results', authenticate, (req, res) => {
     });
   }
 
-  const rows = db.get('import_rows').filter({ job_id: job.id }).value().sort((a, b) => a.row_index - b.row_index);
+  const rows = db.import_rows.filter((r) => r.job_id === job.id).sort((a, b) => a.row_index - b.row_index);
 
   res.json({
     job_id: job.id,
