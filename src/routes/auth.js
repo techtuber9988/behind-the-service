@@ -5,7 +5,9 @@ const { getDb, generateId } = require('../db');
 
 const router = express.Router();
 
-router.post('/register', async (req, res) => {
+const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+router.post('/register', asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -46,7 +48,7 @@ router.post('/register', async (req, res) => {
   });
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -81,6 +83,6 @@ router.post('/login', async (req, res) => {
     user: { id: user.id, email: user.email },
     token,
   });
-});
+}));
 
 module.exports = router;

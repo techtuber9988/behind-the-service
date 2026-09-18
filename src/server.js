@@ -21,10 +21,10 @@ app.get('/health', (req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    error: 'internal_error',
-    message: 'An unexpected error occurred',
+  console.error('Unhandled error:', err.message, err.stack);
+  res.status(err.status || 500).json({
+    error: err.errorCode || 'internal_error',
+    message: err.message || 'An unexpected error occurred',
   });
 });
 
